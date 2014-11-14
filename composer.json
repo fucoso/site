@@ -1,0 +1,21 @@
+{
+    "name": "fucoso/Site",
+    "description": "Object Oriented wrapper for some common functional units needed in each site for codeigniter.",
+    "license": "MIT",
+    "keywords": ["site"],
+    "authors": [
+        {
+            "name": "Syed Haider Abbas",
+            "email": "contact@haiderabbas.me"
+        }
+    ],
+    "require": {},
+    "require-dev": {
+        "phpunit/phpunit": "4.0.*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Fucoso\\Site\\": "src"
+        }
+    }
+}
