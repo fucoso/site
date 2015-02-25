@@ -1,5 +1,5 @@
 {
-    "name": "fucoso/Site",
+    "name": "fucoso/site",
     "description": "Object Oriented wrapper for some common functional units needed in each site for codeigniter.",
     "license": "MIT",
     "keywords": ["site"],
