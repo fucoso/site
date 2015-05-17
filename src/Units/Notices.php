@@ -3,194 +3,141 @@
 namespace Fucoso\Site\Units;
 
 use Exception;
-use Fucoso\Site\Site;
+use Fucoso\Site\Interfaces\ISession;
 
 class Notices
 {
 
-    const SUCCESS = 'success';
-    const ERROR = 'error';
-    const NOTIFICATION = 'notification';
-    const WARNING = 'warning';
-    const INFORMATION = 'information';
+    /**
+     *
+     * @var ISession
+     */
+    protected $sessionProvider;
 
     /**
      *
-     * @var Site 
+     * @var array
      */
-    private $_site = null;
+    protected $nextData = array();
 
     /**
      *
-     * @var array 
+     * @var type
      */
-    private $_messages = array();
+    protected $currentData = array();
 
     /**
      *
-     * @var type 
+     * @var type
      */
-    private $_oldMessages = array();
+    protected $sessionKey = 'siteNoticesData';
 
     /**
      *
-     * @var type 
+     * @param ISession $sessionProvider
      */
-    private $_sessionPrefix = 'site';
-
-    /**
-     * Initiate the Notices Object.
-     * 
-     * @param Site $site
-     */
-    public function __construct(Site $site)
+    public function __construct(ISession $sessionProvider)
     {
-        $this->_site = $site;
-        $this->_loadNotices();
+        $this->sessionProvider = $sessionProvider;
     }
 
     public function __destruct()
     {
-        $messages = serialize($this->_messages);
-        $this->_setUserData($this->_sessionPrefix . 'notices', $messages);
+        if (count($this->nextData) > 0) {
+            $data = serialize($this->nextData);
+            $this->sessionProvider->save($this->sessionKey, $data);
+        }
     }
 
-    private function _loadNotices()
+    public function load()
     {
-        if ($this->_site->session) {
-            $messages = $this->_site->session->userdata($this->_sessionPrefix . 'notices');
+        $data = $this->sessionProvider->read($this->sessionKey);
 
-            if ($messages && $messages != '') {
-                try {
-                    $messages_data = unserialize($messages);
-                    if (is_array($messages_data)) {
-                        $this->_oldMessages = $messages_data;
-                    }
-                } catch (Exception $e) {
-                    
+        if ($data) {
+            try {
+                $unserialized = unserialize($data);
+                if (is_array($unserialized)) {
+                    $this->currentData = $unserialized;
                 }
-            }
-            $this->_site->session->unset_userdata($this->_sessionPrefix . 'notices');
-        }
-    }
+            } catch (Exception $e) {
 
-    private function _setUserData($newdata = array(), $newval = '')
-    {
-        if ((php_sapi_name() == 'cli') or defined('STDIN')) {
-            return;
-        }
-
-        if (is_string($newdata)) {
-            $newdata = array($newdata => $newval);
-        }
-
-        if (count($newdata) > 0) {
-            foreach ($newdata as $key => $val) {
-                $_SESSION[$key] = $val;
             }
         }
+        $this->sessionProvider->remove($this->sessionKey);
     }
 
     /**
      * Push a notice to be accessible in the upcomming session.
-     * 
+     *
      * @param string $key
-     * @param string $title
-     * @param string $message
-     * @param string $class
-     * @param boolean $hide
-     * @param boolean $sticky
+     * @param Notice $notice
      * @return self
      */
-    public function push($key, $title, $message, $class = self::INFORMATION, $hide = false, $sticky = false)
+    public function push($key, Notice $notice)
     {
-        $this->_messages[$key] = array(
-            'message' => $message,
-            'class' => $class,
-            'title' => $title,
-            'hide' => $hide,
-            'sticky' => $sticky,
-        );
-        return $this;
-    }
-
-    /**
-     * Push a notice for current session.
-     * 
-     * @param string $key
-     * @param string $title
-     * @param string $message
-     * @param string $class
-     * @param boolean $hide
-     * @param boolean $sticky
-     * @return self
-     */
-    public function set($key, $title, $message, $class = self::INFORMATION, $hide = false, $sticky = false)
-    {
-        $this->_oldMessages[$key] = array(
-            'message' => $message,
-            'class' => $class,
-            'title' => $title,
-            'hide' => $hide,
-            'sticky' => $sticky,
-        );
+        $this->nextData[$key] = $notice;
         return $this;
     }
 
     /**
      * Get a single notice or all notices for current session by skiping the $key parameter.
-     * 
-     * @param string $key optional
-     * @return array|null
+     *
+     * @param string $key
+     * @return Notice
      */
-    public function get($key = FALSE)
+    public function get($key)
     {
-        if ($key) {
-            if (array_key_exists($key, $this->_oldMessages)) {
-                return $this->_oldMessages[$key];
-            } else {
-                return null;
-            }
-        } else {
-            return $this->_oldMessages;
-        }
-    }
-
-    public function __get($key)
-    {
-        if (array_key_exists($key, $this->_oldMessages)) {
-            return $this->_oldMessages[$key];
+        if (array_key_exists($key, $this->currentData)) {
+            return $this->currentData[$key];
         } else {
             return null;
         }
     }
 
     /**
-     * Propogate the notice for the given key to the upcomming session.
-     * 
+     * Push a notice for current session.
+     *
      * @param string $key
+     * @param Notice $notice
+     * @return self
      */
-    public function propagate($key = false)
+    public function set($key, Notice $notice)
     {
-        if ($key !== false) {
-            if ($this->get($key)) {
-                $this->_messages[$key] = $this->get($key);
-            }
-        } else {
-            foreach ($this->_oldMessages as $messageKey => $message) {
-                if (!array_key_exists($messageKey, $this->_messages)) {
-                    $this->_messages[$messageKey] = $message;
-                }
-            }
-        }
+        $this->currentData[$key] = $notice;
+        return $this;
     }
 
     /**
-     * Clean all messages for upcomming session.
+     *
+     * @param string $key
+     * @return Notice
      */
+    public function __get($key)
+    {
+        return $this->get($key);
+    }
+
     public function clear()
     {
-        $this->_messages = array();
+        $this->nextData = array();
+    }
+
+    /**
+     * Propogate the notice for the given key to the upcomming session.
+     *
+     * @param string $key
+     */
+    public function propagate($key)
+    {
+        if ($this->get($key, false)) {
+            $this->set($key, $this->get($key));
+        }
+        return $this;
+    }
+
+    public function getAll()
+    {
+        return $this->currentData;
     }
 
 }
