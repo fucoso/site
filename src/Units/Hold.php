@@ -3,131 +3,103 @@
 namespace Fucoso\Site\Units;
 
 use Exception;
-use Fucoso\Site\Site;
+use Fucoso\Site\Interfaces\ISession;
 
 class Hold
 {
 
     /**
      *
-     * @var Site 
+     * @var ISession
      */
-    private $_site = null;
+    protected $sessionProvider;
 
     /**
      *
-     * @var string 
+     * @var string
      */
-    private $_data = array();
+    protected $data = array();
 
     /**
      *
-     * @var string 
+     * @var string
      */
-    private $_sessionPrefix = 'site';
+    protected $sessionKey = 'siteHoldData';
 
     /**
-     * Initiate the Hold Object.
-     * 
-     * @param Site $site
+     *
+     * @param ISession $sessionProvider
      */
-    public function __construct(Site $site)
+    public function __construct(ISession $sessionProvider)
     {
-        $this->_site = $site;
-        $this->_initialize();
-        $this->_load();
+        $this->sessionProvider = $sessionProvider;
     }
 
     public function __destruct()
     {
-        $data = serialize($this->_data);
-        $this->_setUserData($this->_sessionPrefix . 'holddata', $data);
+        if (count($this->data) > 0) {
+            $data = serialize($this->data);
+            $this->sessionProvider->save($this->sessionKey, $data);
+        }
     }
 
-    private function _initialize()
+    public function load()
     {
-        
-    }
+        $data = $this->sessionProvider->read($this->sessionKey);
 
-    private function _load()
-    {
-        if ($this->_site->session) {
-            $data = $this->_site->session->userdata($this->_sessionPrefix . 'holddata');
-
-            if ($data && $data != '') {
-                try {
-                    $unserialized = unserialize($data);
-                    if (is_array($unserialized)) {
-                        $this->_data = $unserialized;
-                    }
-                } catch (Exception $e) {
-                    
+        if ($data) {
+            try {
+                $unserialized = unserialize($data);
+                if (is_array($unserialized)) {
+                    $this->data = $unserialized;
                 }
-            }
-            $this->_site->session->unset_userdata($this->_sessionPrefix . 'holddata');
-        }
-    }
+            } catch (Exception $e) {
 
-    private function _setUserData($newdata = array(), $newval = '')
-    {
-        if ((php_sapi_name() == 'cli') or defined('STDIN')) {
-            return;
-        }
-
-        if (is_string($newdata)) {
-            $newdata = array($newdata => $newval);
-        }
-
-        if (count($newdata) > 0) {
-            foreach ($newdata as $key => $val) {
-                $_SESSION[$key] = $val;
             }
         }
+        $this->sessionProvider->remove($this->sessionKey);
     }
 
     public function set($key, $value)
     {
-        $this->_data[$key] = $value;
+        $this->data[$key] = $value;
         return $this;
     }
 
-    public function get($key = false, $default = null)
+    public function get($key, $default = null)
     {
-        if ($key) {
-            if (array_key_exists($key, $this->_data)) {
-                return $this->_data[$key];
-            } else {
-                return $default;
-            }
+        if (array_key_exists($key, $this->data)) {
+            return $this->data[$key];
         } else {
-            return $this->_data;
+            return $default;
         }
     }
 
     public function __set($key, $value)
     {
-        $this->_data[$key] = $value;
+        $this->data[$key] = $value;
     }
 
     public function __get($key)
     {
-        if (array_key_exists($key, $this->_data)) {
-            return $this->_data[$key];
-        } else {
-            return null;
-        }
+        return $this->get($key);
     }
 
     public function reset($key)
     {
-        if (array_key_exists($key, $this->_data)) {
-            unset($this->_data[$key]);
+        if (array_key_exists($key, $this->data)) {
+            unset($this->data[$key]);
         }
     }
 
     public function clear()
     {
-        $this->_data = array();
+        $this->data = array();
+    }
+
+    public function getAll()
+    {
+        return $this->data;
     }
 
 }
