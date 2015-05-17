@@ -3,80 +3,95 @@
 namespace Fucoso\Site\Units;
 
 use Exception;
-use Fucoso\Site\Site;
+use Fucoso\Site\Interfaces\IConfig;
 
 /**
- * 
+ *
  */
 class Config
 {
 
     /**
      *
-     * @var Site 
+     * @var array
      */
-    private $_site = null;
-
-    /**
-     * Settings List.
-     * @var array 
-     */
-    private $_properties = array();
+    protected $data = array();
 
     /**
      * Config file name used for loading site settings.
-     * @var string 
+     * @var string
      */
-    private $_configFile = 'site';
+    protected $group = 'site';
 
-    public function __construct(Site $site)
+    public function __construct()
     {
-        $this->_site = $site;
-        $this->_load();
+
+    }
+
+    public function getData()
+    {
+        return $this->data;
+    }
+
+    public function getGroup()
+    {
+        return $this->group;
+    }
+
+    public function setData($data)
+    {
+        $this->data = $data;
+        return $this;
+    }
+
+    public function setGroup($group)
+    {
+        $this->group = $group;
+        return $this;
     }
 
     /**
-     * Fetch all settings from database.
+     *
+     * @param IConfig $provider
+     * @return type
      */
-    private function _load()
+    public function load(IConfig $provider)
     {
-        if ($this->_configFile) {
-            //CodeIgniter Dependent.
-            if ($this->_site->ci->config->load($this->_configFile, true, true)) {
-                //CodeIgniter Dependent.
-                $results = $this->_site->ci->config->item($this->_configFile);
-                if ($results) {
-                    foreach ($results as $key => $value) {
-                        if (!array_key_exists($key, $this->_properties)) {
-                            try {
-                                if (is_array($value)) {
-                                    $value = json_decode(json_encode($value)); // An easy way of converting all data to objects.
-                                }
-                                $this->_properties[$key] = $value;
-                            } catch (Exception $ex) {
-                                
-                            }
-                        }
-                    }
+        if (!$this->group) {
+            return;
+        }
+
+        $results = $provider->loadFromGroup($this->group);
+        if (!$results) {
+            return;
+        }
+
+        foreach ($results as $key => $value) {
+            try {
+                if (is_array($value)) {
+                    $value = json_decode(json_encode($value)); // An easy way of converting all data to objects.
                 }
+                $this->data[$key] = $value;
+            } catch (Exception $ex) {
+
             }
         }
     }
 
     /**
      * Get a single setting value this function is normally called by __get function.
-     * 
-     * @param string $name
+     *
+     * @param string $key
      * @param string $default
      * @return string|null
      */
-    private function _getSetting($name, $default = null)
+    protected function getSetting($key, $default = null)
     {
-        if (array_key_exists($name, $this->_properties)) {
-            if ($this->_properties[$name] === null) {
+        if (array_key_exists($key, $this->data)) {
+            if ($this->data[$key] === null) {
                 return $default;
             } else {
-                return $this->_properties[$name];
+                return $this->data[$key];
             }
         } else {
             return $default;
@@ -85,23 +100,19 @@ class Config
 
     /**
      * Magic function to fetch the retrieved settings are class attributes.
-     * 
+     *
      * @param string $name
      * @param string $default
      * @return string|null
      */
     public function __get($name)
     {
-        return $this->_getSetting($name, FALSE);
+        return $this->getSetting($name, FALSE);
     }
 
-    /**
-     * Get all properties held in the config array.
-     * @return Config[]
-     */
     public function getAll()
     {
-        return $this->_properties;
+        return $this->data;
     }
 
 }
