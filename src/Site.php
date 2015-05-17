@@ -2,24 +2,22 @@
 
 namespace Fucoso\Site;
 
-use CI_DB_active_record;
-use Fucoso\Site\Interfaces\ParserInterface;
-use Fucoso\Site\Interfaces\SessionInterface;
-use Fucoso\Site\Request\Request;
+use Fucoso\Site\Interfaces\IData\IData;
+use Fucoso\Site\Interfaces\ISession;
+use Fucoso\Site\Interfaces\ISite;
+use Fucoso\Site\Interfaces\ITemplate;
 use Fucoso\Site\Units\Auth;
+use Fucoso\Site\Units\Browser;
+use Fucoso\Site\Units\Bubble;
 use Fucoso\Site\Units\Cache;
 use Fucoso\Site\Units\Config;
 use Fucoso\Site\Units\Email;
 use Fucoso\Site\Units\Hold;
-use Fucoso\Site\Units\Next;
 use Fucoso\Site\Units\Notices;
 use Fucoso\Site\Units\Settings;
-use MY_Controller;
+use Fucoso\Site\Units\Url;
 
-/**
- *
- */
-class Site
+abstract class Site implements ISite
 {
 
     /**
@@ -30,176 +28,145 @@ class Site
 
     /**
      *
-     * @var MY_Controller
+     * @var Url
      */
-    public $ci = null;
+    public $url;
 
     /**
      *
-     * @var CI_DB_active_record
+     * @var Browser
      */
-    public $db = null;
-
-    /**
-     *
-     * @var string
-     */
-    public $title = '';
-
-    /**
-     *
-     * @var string
-     */
-    public $domainTitle = '';
-
-    /**
-     *
-     * @var Request
-     */
-    public $request = null;
+    public $browser;
 
     /**
      *
      * @var Config
      */
-    public $config = NULL;
+    public $config;
+
+    /**
+     *
+     * @var IData
+     */
+    public $data;
 
     /**
      *
      * @var Settings
      */
-    public $settings = NULL;
+    public $settings;
 
     /**
      *
-     * @var Next
+     * @var ISession
      */
-    public $next = NULL;
+    public $session;
 
     /**
      *
      * @var Hold
      */
-    public $hold = NULL;
+    public $hold;
+
+    /**
+     *
+     * @var Bubble
+     */
+    public $bubble;
 
     /**
      *
      * @var Notices
      */
-    public $notices = NULL;
-
-    /**
-     *
-     * @var SessionInterface
-     */
-    public $session = null;
+    public $notices;
 
     /**
      *
      * @var Auth
      */
-    public $auth = null;
+    public $auth;
 
     /**
      *
      * @var Cache
      */
-    public $cache = null;
+    public $cache;
 
     /**
      *
      * @var Email
      */
-    public $email = null;
+    public $email;
 
     /**
      *
-     * @var Theme
+     * @var ITemplate
      */
-    public $theme = null;
+    public $template;
 
-    /**
-     *
-     * @var ParserInterface
-     */
-    public $parser = null;
-
-    public function __construct()
+    public function getUrl()
     {
-        $this->_load();
+        return $this->url;
     }
 
-    private function _load()
+    public function getBrowser()
     {
-        $this->ci = &get_instance();
-
-        //Load Auth Library.
-        //CodeIgniter Dependent.
-        $this->ci->load->library('session');
-        $this->session = $this->ci->session;
-
-        //Load Parser Library
-        //CodeIgniter Dependent.
-        $this->ci->load->library('parser');
-        $this->parser = $this->ci->parser;
+        return $this->browser;
     }
 
-    public function initialize()
+    public function getConfig()
     {
-        //Load Site Request
-        $this->request = new Request($this);
-        $this->request->initialize();
-
-        //Always make sure that Config is loaded before everything other than url.
-        $this->config = new Config($this);
-
-        if ($this->config->siteUseDatabase) {
-            //Load the database object to be used by whole site.
-            $this->db = $this->ci->load->database($this->config->siteDatabaseGroup, true);
-        }
-
-        $this->settings = new Settings($this);
-
-        //Initiate Next Session Data Container.
-        $this->next = new Next($this);
-
-        //Initiate Persistent Session Data Container.
-        $this->hold = new Hold($this);
-
-        //Initiate Noticies Container.
-        $this->notices = new Notices($this);
-
-        //Load Site Cache
-        $this->cache = new Cache($this);
-
-        //Load Site Email Processor
-        $this->email = new Email($this);
-
-        //At the end initiate the theme object.
-        $this->theme = new Theme($this);
-
-        //Process site settings and apply changes if any needed.
-        $this->_processConfiguration();
-
-        //Load Auth Library.
-        $this->auth = new Auth($this);
-        $this->auth->loginUserFromSession();
+        return $this->config;
     }
 
-    private function _processConfiguration()
+    public function getData()
     {
-        $this->title = '' . $this->settings->title;
-        $this->domainTitle = '' . $this->settings->domainTitle;
+        return $this->data;
     }
 
-    public static function &getSharedInstance()
+    public function getSettings()
     {
-        if (!self::$sharedInstance) {
-            self::$sharedInstance = new Site();
-            self::$sharedInstance->initialize();
-        }
+        return $this->settings;
+    }
 
-        return self::$sharedInstance;
+    public function getSession()
+    {
+        return $this->session;
+    }
+
+    public function getHold()
+    {
+        return $this->hold;
+    }
+
+    public function getBubble()
+    {
+        return $this->bubble;
+    }
+
+    public function getNotices()
+    {
+        return $this->notices;
+    }
+
+    public function getAuth()
+    {
+        return $this->auth;
+    }
+
+    public function getCache()
+    {
+        return $this->cache;
+    }
+
+    public function getEmail()
+    {
+        return $this->email;
+    }
+
+    public function getTemplate()
+    {
+        return $this->template;
     }
 
 }
