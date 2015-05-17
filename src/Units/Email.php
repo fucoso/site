@@ -2,55 +2,96 @@
 
 namespace Fucoso\Site\Units;
 
-use Fucoso\Site\Site;
-use Fucoso\Site\Theme;
+use Fucoso\Site\Interfaces\IEmail;
+use Fucoso\Site\Interfaces\ITemplate;
 
 class Email
 {
 
     /**
      *
-     * @var Site
+     * @var IEmail
      */
-    private $_site = null;
+    protected $provider;
 
     /**
      *
-     * @var Theme
+     * @var string
      */
-    public $theme = null;
+    protected $fromDomain = 'local';
 
-    public function __construct(Site $site)
+    /**
+     *
+     * @var string
+     */
+    protected $fromTitle = 'Local';
+
+    /**
+     *
+     * @var ITemplate
+     */
+    protected $template = null;
+
+    public function __construct(IEmail $provider)
     {
-        $this->_site = $site;
+        $this->provider = $provider;
+    }
 
-        $this->theme = new Theme($this->_site);
-        $this->theme->setUseMedia(false);
+    public function getFromDomain()
+    {
+        return $this->fromDomain;
+    }
+
+    public function getFromTitle()
+    {
+        return $this->fromTitle;
+    }
+
+    public function getTemplate()
+    {
+        return $this->template;
+    }
+
+    public function setFromDomain($fromDomain)
+    {
+        $this->fromDomain = $fromDomain;
+        return $this;
+    }
+
+    public function setFromTitle($fromTitle)
+    {
+        $this->fromTitle = $fromTitle;
+        return $this;
+    }
+
+    public function setTemplate(ITemplate $template)
+    {
+        $this->template = $template;
+        return $this;
     }
 
     public function send($to, $subject, $view, $data)
     {
-        $this->_site->ci->load->library('email');
+        if (!$this->getTheme() && !$this->provider->isReady()) {
+            return false;
+        }
 
-        $this->_site->ci->email->clear();
+        $this->provider->clear();
+        $this->provider->setMailType('html');
 
-        $config['mailtype'] = "html";
-
-        $this->_site->ci->email->initialize($config);
-
-        $this->_site->ci->email->from('mailer@' . $this->_site->request->url->getQualifiedDomainWithSubDomain(), $this->_site->domainTitle);
-        $this->_site->ci->email->to($to);
-        $this->_site->ci->email->subject($subject);
+        $this->provider->from('mailer@' . $this->fromDomain, $this->fromTitle);
+        $this->provider->to($to);
+        $this->provider->subject($subject);
 
         if (!array_key_exists('pageTitle', $data)) {
             $data['pageTitle'] = $subject;
         }
 
-        $html = $this->theme->view($view, $data, true);
+        $html = $this->template->view($view, $data, true);
 
-        $this->_site->ci->email->message($html);
+        $this->provider->message($html);
 
-        if ($this->_site->ci->email->send()) {
+        if ($this->provider->send()) {
             return true;
         } else {
             //return false;
@@ -60,21 +101,20 @@ class Email
 
     public function sendHtml($to, $subject, $message)
     {
-        $this->_site->ci->load->library('email');
+        if (!$this->getTheme() && !$this->provider->isReady()) {
+            return false;
+        }
 
-        $this->_site->ci->email->clear();
+        $this->provider->clear();
+        $this->provider->setMailType('text');
 
-        $config['mailtype'] = "html";
+        $this->provider->from('mailer@' . $this->fromDomain, $this->fromTitle);
+        $this->provider->to($to);
+        $this->provider->subject($subject);
 
-        $this->_site->ci->email->initialize($config);
+        $this->provider->message($message);
 
-        $this->_site->ci->email->from('mailer@' . $this->_site->request->url->getQualifiedDomainWithSubDomain());
-        $this->_site->ci->email->to($to);
-        $this->_site->ci->email->subject($subject);
-
-        $this->_site->ci->email->message($message);
-
-        if ($this->_site->ci->email->send()) {
+        if ($this->provider->send()) {
             return true;
         } else {
             //return false;
@@ -84,17 +124,20 @@ class Email
 
     public function sendText($to, $subject, $message)
     {
-        $this->_site->ci->load->library('email');
+        if (!$this->getTheme() && !$this->provider->isReady()) {
+            return false;
+        }
 
-        $this->_site->ci->email->clear();
+        $this->provider->clear();
+        $this->provider->setMailType('text');
 
-        $this->_site->ci->email->from('mailer@' . $this->_site->request->url->getQualifiedDomainWithSubDomain());
-        $this->_site->ci->email->to($to);
-        $this->_site->ci->email->subject($subject);
+        $this->provider->from('mailer@' . $this->fromDomain, $this->fromTitle);
+        $this->provider->to($to);
+        $this->provider->subject($subject);
 
-        $this->_site->ci->email->message($message);
+        $this->provider->message($message);
 
-        if ($this->_site->ci->email->send()) {
+        if ($this->provider->send()) {
             return true;
         } else {
             //return false;
