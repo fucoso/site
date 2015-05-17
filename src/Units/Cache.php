@@ -2,70 +2,53 @@
 
 namespace Fucoso\Site\Units;
 
-use CI_Cache;
-use Fucoso\Site\Site;
+use Fucoso\Site\Interfaces\ICache;
 
 class Cache
 {
 
     /**
      *
-     * @var Site 
+     * @var ICache
      */
-    private $_site = null;
+    protected $provider;
 
     /**
      *
-     * @var string 
+     * @var boolean
      */
-    private $_adapter = 'file';
+    protected $enabled = false;
 
-    /**
-     *
-     * @var boolean 
-     */
-    private $_enabled = true;
-
-    /**
-     *
-     * @var CI_Cache 
-     */
-    private $_driver = null;
-
-    public function __construct(Site $site)
+    public function __construct(ICache $provider, $adapter = 'file')
     {
-        $this->_site = $site;
-
-        $this->_enabled = $this->_site->config->cacheEnabled;
-
-        if ($this->_enabled) {
-
-            if ($this->_site->config->cacheAdapter) {
-                $this->_adapter = $this->_site->config->cacheAdapter;
-            }
-            //CodeIgniter Dependent.
-            $this->_site->ci->load->driver('cache', array('adapter' => $this->_adapter));
-            $this->_driver = $this->_site->ci->cache;
-        }
+        $this->provider = $provider;
+        $this->provider->loadDriver($adapter);
     }
 
-    public function set($key, $data, $ttl = 60)
+    public function getProvider()
     {
-        if ($this->_enabled && $this->_driver) {
-            $this->_driver->save($key . '.cache', $data, $ttl);
-            return true;
-        } else {
-            return false;
-        }
+        return $this->provider;
     }
 
-    public function get($key)
+    public function getEnabled()
     {
-        if ($this->_enabled && $this->_driver) {
-            return $this->_driver->get($key . '.cache');
-        } else {
-            return null;
+        return $this->enabled;
+    }
+
+    public function save($key, $data, $minutesToLive = 60)
+    {
+        if ($this->enabled) {
+            return $this->provider->save($key . '.cache', $data, $minutesToLive);
         }
+        return false;
+    }
+
+    public function read($key)
+    {
+        if ($this->enabled) {
+            return $this->provider->read($key . '.cache');
+        }
+        return null;
     }
 
 }
