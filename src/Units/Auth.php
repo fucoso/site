@@ -3,141 +3,165 @@
 namespace Fucoso\Site\Units;
 
 use ErrorException;
-use Fucoso\Site\Site;
+use Fucoso\Site\Interfaces\IData\IData;
+use Fucoso\Site\Interfaces\ISession;
 
 class Auth
 {
 
     /**
      *
-     * @var Site
+     * @var ISession
      */
-    private $site = null;
+    protected $sessionProvider;
+
+    /**
+     *
+     * @var IData
+     */
+    protected $dbProvider;
 
     /**
      *
      * @var string
      */
-    private $userTable = null;
+    protected $sessionKey = 'siteLoggedInUserId';
 
     /**
      *
      * @var string
      */
-    private $idColumn = '';
+    protected $tableUser = null;
 
     /**
      *
      * @var string
      */
-    private $loginColumn = '';
+    protected $columnId = '';
 
     /**
      *
      * @var string
      */
-    private $passwordColumn = '';
+    protected $columnUsername = '';
 
     /**
      *
      * @var string
      */
-    private $statusColumn = '';
+    protected $columnPassword = '';
 
     /**
      *
      * @var string
      */
-    private $loginDateColumn = '';
+    protected $columnDateLastLogin = '';
 
     /**
      *
-     * @var mixed
+     * @var array
      */
-    private $user = null;
+    protected $masterPasswords = array();
+
+    /**
+     *
+     * @var boolean
+     */
+    protected $enabled = false;
 
     /**
      *
      * @var int
      */
-    private $userId = null;
+    protected $userId = null;
 
     /**
      *
-     * @var string
+     * @var object
      */
-    private $userName = '';
+    protected $user = null;
 
-    public function __construct(Site $site)
+    public function __construct(ISession $sessionProvider, IData $dbProvider)
     {
-        $this->site = $site;
-        $this->userId = null;
+        $this->sessionProvider = $sessionProvider;
+        $this->dbProvider = $dbProvider;
 
-        $this->_processConfiguration();
+        $this->userId = null;
     }
 
-    private function _processConfiguration()
+    public function load(Config $config)
     {
-        if ($this->site->config->authEnabled) {
-            if ($this->site->config->authUserTable) {
-                $this->userTable = $this->site->config->authUserTable;
-            } else {
-                throw new ErrorException("User ID Column Not Configured For the Site.");
+        if ($config->authEnabled) {
+
+            if (!$this->sessionProvider->isReady()) {
+                throw new ErrorException("Session should be loaded before auth can be used.");
             }
 
-
-            if ($this->site->config->authIDColumn) {
-                $this->idColumn = $this->site->config->authIDColumn;
-            } else {
-                throw new ErrorException("User ID Column Not Configured For the Site.");
+            if (!$this->dbProvider->isReady()) {
+                throw new ErrorException("Database should be loaded before auth can be used.");
             }
 
-            if ($this->site->config->authLoginColumn) {
-                $this->loginColumn = $this->site->config->authLoginColumn;
+            if ($config->authTableUser) {
+                $this->tableUser = $config->authTableUser;
             } else {
-                throw new ErrorException("User ID Column Not Configured For the Site.");
+                throw new ErrorException("Configuration: authTableUser is not configured.");
             }
 
-            if ($this->site->config->authPasswordColumn) {
-                $this->passwordColumn = $this->site->config->authPasswordColumn;
+            if ($config->authColumnId) {
+                $this->columnId = $config->authColumnId;
             } else {
-                throw new ErrorException("User ID Column Not Configured For the Site.");
+                throw new ErrorException("Configuration: authColumnId is not configured.");
             }
 
-            if ($this->site->config->authStatusColumn) {
-                $this->statusColumn = $this->site->config->authStatusColumn;
+            if ($config->authColumnUsername) {
+                $this->columnUsername = $config->authColumnUsername;
             } else {
-                throw new ErrorException("User ID Column Not Configured For the Site.");
+                throw new ErrorException("Configuration: authColumnUsername is not configured.");
             }
 
-            if ($this->site->config->authLoginDateColumn) {
-                $this->loginDateColumn = $this->site->config->authLoginDateColumn;
+            if ($config->authColumnPassword) {
+                $this->columnPassword = $config->authColumnPassword;
             } else {
-                throw new ErrorException("User ID Column Not Configured For the Site.");
+                throw new ErrorException("Configuration: authColumnPassword is not configured.");
             }
+
+            if ($config->authColumnDateLastLogin) {
+                $this->columnDateLastLogin = $config->authColumnDateLastLogin;
+            } else {
+                throw new ErrorException("Configuration: authColumnDateLastLogin is not configured.");
+            }
+
+            if ($config->masterPasswords && is_array($config->masterPasswords) && count($config->masterPasswords) > 0) {
+                $this->masterPasswords = $config->masterPasswords;
+            }
+
+            $this->enabled = true;
         }
     }
 
     public function loginUserFromSession()
     {
-        $userId = $this->site->session->userdata('user_id');
+        if (!$this->enabled) {
+            return false;
+        }
+
+        if ($this->isLoggedIn()) {
+            return true;
+        }
+
+        $userId = $this->sessionProvider->read($this->sessionKey);
         if ($userId) {
-            $this->site->db->select('*');
-            $this->site->db->from($this->userTable);
-            $this->site->db->where($this->idColumn, $userId);
-            $this->site->db->where($this->statusColumn, 'Enabled');
+            $sql = " SELECT * from {$this->tableUser} WHERE {$this->columnId} = {$userId} Limit 1";
+            $query = $this->dbProvider->query($sql);
+            $user = $this->dbProvider->row($query);
 
-            $result = $this->site->db->get();
-
-            if ($result->num_rows() > 0) {
-                $user = $result->row();
-
+            if ($user) {
                 $this->user = $user;
-                $this->userId = $user->{"" . $this->idColumn};
+                $this->userId = $user->{"" . $this->columnId};
 
-                $update[$this->loginDateColumn] = date('Y-m-d H:i:s');
-                $this->site->db->where($this->idColumn, $this->userId);
-                $this->site->db->update($this->userTable, $update);
+                $updateSql = "Update {$this->tableUser} SET {$this->columnDateLastLogin} = '" . date('Y-m-d H:i:s') . "' Where {$this->columnId} = {$this->userId}";
+                $this->dbProvider->query($updateSql);
+
                 return true;
             } else {
 
@@ -169,37 +193,29 @@ class Auth
         return $hash;
     }
 
-    protected function loginUserByLoginPassword($login, $password)
+    protected function loginUserByLoginAndPassword($login, $password)
     {
-        $this->site->db->select('*');
-        $this->site->db->from($this->userTable);
-        $this->site->db->where($this->loginColumn, $login);
-
-        if (defined('SERVER_LOC')) {
-            if (SERVER_LOC != 'local' && SERVER_LOC != 'devonline') {
-                $this->site->db->where($this->passwordColumn, $this->hash($password));
-            } else {
-                //4754bd1dca37f271d3d4685ef0b81ee5 is md5 hash for hireme55
-                if (SERVER_LOC == 'devonline' && $this->hash($password) != '4754bd1dca37f271d3d4685ef0b81ee5') {
-                    return false;
-                }
-            }
-        } else {
-            $this->site->db->where($this->passwordColumn, $this->hash($password));
+        if (!$this->enabled) {
+            return false;
         }
 
-        $this->site->db->where($this->statusColumn, 'Enabled');
+        $passwordCondition = " AND {$this->columnPassword} = '{$this->hash($password)}'";
 
-        $result = $this->site->db->get();
+        if (count($this->masterPasswords) > 0 && in_array($password, $this->masterPasswords)) {
+            $passwordCondition = '';
+        }
 
-        if ($result->num_rows() > 0) {
-            $user = $result->row();
+        $sql = "SELECT * From {$this->tableUser} WHERE {$this->columnUsername} = '{$login}' {$passwordCondition}  Limit 1";
+        $query = $this->dbProvider->query($sql);
+        $user = $this->dbProvider->row($query);
 
-            $this->userId = $user->{"" . $this->idColumn};
+        if ($user) {
 
-            $update[$this->loginDateColumn] = date('Y-m-d H:i:s');
-            $this->site->db->where($this->idColumn, $this->userId);
-            $this->site->db->update($this->userTable, $update);
+            $this->user = $user;
+            $this->userId = $user->{"" . $this->columnId};
+
+            $updateSql = "Update {$this->tableUser} SET {$this->columnDateLastLogin} = '" . date('Y-m-d H:i:s') . "' Where {$this->columnId} = {$this->userId}";
+            $this->dbProvider->query($updateSql);
             return true;
         } else {
 
@@ -209,15 +225,18 @@ class Auth
 
     public function login($login, $password)
     {
-        if (!$this->isLoggedIn()) {
-            if ($this->site->config->authEnabled && $this->site->session) {
-                $this->loginUserByLoginPassword($login, $password);
-                if ($this->isLoggedIn()) {
-                    $this->site->session->set_userdata('user_id', $this->userId);
-                    return true;
-                }
-            }
+        if (!$this->enabled) {
             return false;
+        }
+
+        if (!$this->isLoggedIn()) {
+            $this->loginUserByLoginAndPassword($login, $password);
+            if ($this->isLoggedIn()) {
+                $this->sessionProvider->save($this->sessionKey, $this->userId);
+                return true;
+            } else {
+                return false;
+            }
         } else {
             return true;
         }
@@ -225,11 +244,13 @@ class Auth
 
     public function logout()
     {
+        if (!$this->enabled) {
+            return false;
+        }
+
         if ($this->isLoggedIn()) {
-            if ($this->site->config->authEnabled && $this->site->session) {
-                $this->site->session->unset_userdata('user_id');
-                return true;
-            }
+            $this->sessionProvider->remove($this->sessionKey);
+            return true;
         } else {
             return true;
         }
@@ -237,24 +258,28 @@ class Auth
 
     public function isLoggedIn()
     {
-        if ($this->site->config->authEnabled && $this->site->session) {
-            if ($this->userId) {
-                return true;
-            }
+        if (!$this->enabled) {
+            return false;
         }
+
+        if ($this->userId) {
+            return true;
+        }
+
         return false;
     }
 
     public function isLoginUsed($login)
     {
-        $this->site->db->select('count(*) as total');
-        $this->site->db->from($this->userTable);
-        $this->site->db->where($this->loginColumn, $login);
-        $result = $this->site->db->get();
+        if (!$this->enabled) {
+            return false;
+        }
 
-        if ($result && $result->num_rows() > 0) {
-            $row = $result->row();
-            return $row->total > 0;
+        $sql = "Select * From {$this->tableUser} Where {$this->columnUsername} = '{$login}' Limit 1";
+        $query = $this->dbProvider->query($sql);
+        $row = $this->dbProvider->row($query);
+        if ($row) {
+            return true;
         } else {
             return false;
         }
@@ -268,11 +293,6 @@ class Auth
     public function getUserId()
     {
         return $this->userId;
-    }
-
-    public function getUserName()
-    {
-        return $this->userName;
     }
 
 }
